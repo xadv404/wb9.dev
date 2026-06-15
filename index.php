@@ -140,12 +140,12 @@ define('SITE_NAME',    'wb9 Transfer');
       <p class="modal-section-label">Browser extension</p>
       <div class="wallet-options">
         <button class="wallet-option" data-wallet="metamask">
-          <span class="wallet-option-icon">🦊</span>
+          <span class="wallet-option-icon"><img src="https://raw.githubusercontent.com/WalletConnect/walletconnect-assets/master/Icon/MetaMask/Icon.png" width="28" height="28" style="border-radius:6px" alt="MetaMask"></span>
           <div><div class="wallet-option-name">MetaMask</div><div class="wallet-option-desc">metamask.io</div></div>
           <span class="wallet-option-tag">Extension</span>
         </button>
         <button class="wallet-option" data-wallet="coinbase">
-          <span class="wallet-option-icon">🔵</span>
+          <span class="wallet-option-icon"><img src="https://raw.githubusercontent.com/WalletConnect/walletconnect-assets/master/Icon/Coinbase%20Wallet/Icon.png" width="28" height="28" style="border-radius:6px" alt="Coinbase Wallet"></span>
           <div><div class="wallet-option-name">Coinbase Wallet</div><div class="wallet-option-desc">By Coinbase</div></div>
           <span class="wallet-option-tag">Extension</span>
         </button>

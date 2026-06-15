@@ -114,67 +114,35 @@ function renderDetectedWallets() {
 // On mobile, clicking these opens the wallet app directly.
 // The app loads the dApp inside its built-in browser and injects window.ethereum.
 
+// Icons from the official WalletConnect assets repo (wallet-provided logos)
+const WC_ICON = (name) =>
+  `https://raw.githubusercontent.com/WalletConnect/walletconnect-assets/master/Icon/${encodeURIComponent(name)}/Icon.png`;
+
 const MOBILE_WALLETS = [
   {
     name: 'MetaMask',
-    icon: '🦊',
-    // metamask.app.link redirects to the app on iOS/Android
+    icon: WC_ICON('MetaMask'),
     deeplink: (url) => `https://metamask.app.link/dapp/${url.replace(/^https?:\/\//, '')}`,
   },
   {
     name: 'Trust Wallet',
-    icon: '🛡️',
+    icon: WC_ICON('Trust Wallet'),
     deeplink: (url) => `https://link.trustwallet.com/open_url?coin_id=60&url=${encodeURIComponent(url)}`,
   },
   {
     name: 'Coinbase Wallet',
-    icon: '🔵',
+    icon: WC_ICON('Coinbase Wallet'),
     deeplink: (url) => `https://go.cb-wallet.com/dapp?url=${encodeURIComponent(url)}`,
   },
   {
     name: 'Rainbow',
-    icon: '🌈',
+    icon: WC_ICON('Rainbow'),
     deeplink: (url) => `https://rnbwapp.com/dapp?url=${encodeURIComponent(url)}`,
   },
   {
     name: 'OKX Wallet',
-    icon: '⬛',
+    icon: WC_ICON('OKX Wallet'),
     deeplink: (url) => `okx://wallet/dapp/url?dappUrl=${encodeURIComponent(url)}`,
-  },
-  {
-    name: 'Zerion',
-    icon: '💠',
-    deeplink: (url) => `https://app.zerion.io/dapp?url=${encodeURIComponent(url)}`,
-  },
-  {
-    name: 'imToken',
-    icon: '🔷',
-    deeplink: (url) => `imtokenv2://navigate/DAppBrowser?url=${encodeURIComponent(url)}`,
-  },
-  {
-    name: 'TokenPocket',
-    icon: '💜',
-    deeplink: (url) => `tpoutside://pull.activity?param=${encodeURIComponent(JSON.stringify({ url, chain: 'ETH' }))}`,
-  },
-  {
-    name: 'SafePal',
-    icon: '🔐',
-    deeplink: (url) => `safepal://dapp?url=${encodeURIComponent(url)}`,
-  },
-  {
-    name: 'Bitget Wallet',
-    icon: '🟦',
-    deeplink: (url) => `bitkeep://bkconnect?action=dapp&url=${encodeURIComponent(url)}`,
-  },
-  {
-    name: 'Exodus',
-    icon: '⚡',
-    deeplink: (url) => `exodus://dapp?url=${encodeURIComponent(url)}`,
-  },
-  {
-    name: 'Kraken Wallet',
-    icon: '🐙',
-    deeplink: (url) => `krakenwallet://dapp?url=${encodeURIComponent(url)}`,
   },
 ];
 
@@ -192,7 +160,10 @@ function renderMobileWallets() {
     btn.rel        = 'noopener noreferrer';
     btn.style.textDecoration = 'none';
     btn.innerHTML  = `
-      <span class="wallet-option-icon">${icon}</span>
+      <span class="wallet-option-icon">
+        <img src="${icon}" width="28" height="28" style="border-radius:6px" alt="${name}"
+             onerror="this.style.display='none';this.parentElement.textContent='📱'">
+      </span>
       <div>
         <div class="wallet-option-name">${name}</div>
         <div class="wallet-option-desc">Open in ${name} app</div>
