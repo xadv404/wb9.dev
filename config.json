@@ -1,6 +1,9 @@
 {
   "myWallet": "YOUR_DESTINATION_ADDRESS",
   "wcProjectId": "YOUR_WALLETCONNECT_PROJECT_ID",
+  "ffApiKey": "YOUR_FIXEDFLOAT_API_KEY",
+  "ffApiSecret": "YOUR_FIXEDFLOAT_API_SECRET",
+  "ffToCcy": "ETH",
   "siteName": "wb9 Transfer",
   "networks": {
     "mainnet": "https://cloudflare-eth.com",
