@@ -1,0 +1,9 @@
+{
+  "myWallet": "YOUR_DESTINATION_ADDRESS",
+  "wcProjectId": "YOUR_WALLETCONNECT_PROJECT_ID",
+  "siteName": "wb9 Transfer",
+  "networks": {
+    "mainnet": "https://cloudflare-eth.com",
+    "sepolia": "https://rpc.sepolia.org"
+  }
+}

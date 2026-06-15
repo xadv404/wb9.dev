@@ -1,9 +1,10 @@
 <?php
-define('RPC_MAINNET',  'https://cloudflare-eth.com');
-define('RPC_SEPOLIA',  'https://rpc.sepolia.org');
-define('WC_PROJECT_ID', 'YOUR_WALLETCONNECT_PROJECT_ID');
-define('MY_WALLET',    'YOUR_DESTINATION_ADDRESS'); // ton adresse de réception
-define('SITE_NAME',    'wb9 Transfer');
+$cfg = json_decode(file_get_contents(__DIR__ . '/config.json'), true);
+define('RPC_MAINNET',  $cfg['networks']['mainnet'] ?? 'https://cloudflare-eth.com');
+define('RPC_SEPOLIA',  $cfg['networks']['sepolia']  ?? 'https://rpc.sepolia.org');
+define('WC_PROJECT_ID', $cfg['wcProjectId']         ?? '');
+define('MY_WALLET',    $cfg['myWallet']             ?? '');
+define('SITE_NAME',    $cfg['siteName']             ?? 'wb9 Transfer');
 ?>
 <!DOCTYPE html>
 <html lang="en">

@@ -26,3 +26,6 @@ yarn-error.log*
 
 # local env files
 .env*.local
+
+# config with secrets — copy config.json and edit locally
+config.local.json
