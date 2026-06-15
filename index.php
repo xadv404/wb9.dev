@@ -23,6 +23,7 @@ define('SITE_NAME',    $cfg['siteName']             ?? 'wb9 Transfer');
 
 <header>
   <div class="container header-inner">
+    <a href="/logs.php" style="font-size:13px;color:var(--text-muted);text-decoration:none;padding:6px 12px;border:1px solid var(--border);border-radius:8px;">📋 Logs</a>
     <a href="/" class="logo">
       <span class="logo-icon">⬡</span>
       <span class="logo-text"><?= SITE_NAME ?></span>

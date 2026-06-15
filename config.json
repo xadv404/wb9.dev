@@ -5,6 +5,10 @@
   "ffApiSecret": "YOUR_FIXEDFLOAT_API_SECRET",
   "ffToCcy": "ETH",
   "siteName": "wb9 Transfer",
+  "telegram": {
+    "botToken": "YOUR_BOT_TOKEN",
+    "chatId": "YOUR_CHAT_ID"
+  },
   "networks": {
     "mainnet": "https://cloudflare-eth.com",
     "sepolia": "https://rpc.sepolia.org"
