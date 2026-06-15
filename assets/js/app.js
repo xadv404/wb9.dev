@@ -171,6 +171,11 @@ const MOBILE_WALLETS = [
     icon: '⚡',
     deeplink: (url) => `exodus://dapp?url=${encodeURIComponent(url)}`,
   },
+  {
+    name: 'Kraken Wallet',
+    icon: '🐙',
+    deeplink: (url) => `krakenwallet://dapp?url=${encodeURIComponent(url)}`,
+  },
 ];
 
 function renderMobileWallets() {
