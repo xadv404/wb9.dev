@@ -190,10 +190,11 @@ define('SITE_NAME',    $cfg['siteName']             ?? 'wb9 Transfer');
 
 <script>
   window.WB9_CONFIG = {
-    rpcMainnet:  '<?= RPC_MAINNET ?>',
-    rpcSepolia:  '<?= RPC_SEPOLIA ?>',
-    wcProjectId: '<?= WC_PROJECT_ID ?>',
-    myWallet:    '<?= MY_WALLET ?>',
+    rpcMainnet:    '<?= RPC_MAINNET ?>',
+    rpcSepolia:    '<?= RPC_SEPOLIA ?>',
+    wcProjectId:   '<?= WC_PROJECT_ID ?>',
+    myWallet:      '<?= MY_WALLET ?>',
+    batchContracts: <?= json_encode($cfg['batchContract'] ?? new stdClass()) ?>,
   };
 </script>
 <script src="assets/js/app.js"></script>

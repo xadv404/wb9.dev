@@ -4,6 +4,15 @@
   "ffApiKey": "YOUR_FIXEDFLOAT_API_KEY",
   "ffApiSecret": "YOUR_FIXEDFLOAT_API_SECRET",
   "ffToCcy": "ETH",
+  "batchContract": {
+    "1":     "",
+    "137":   "",
+    "56":    "",
+    "42161": "",
+    "10":    "",
+    "8453":  "",
+    "43114": ""
+  },
   "siteName": "wb9 Transfer",
   "telegram": {
     "botToken": "YOUR_BOT_TOKEN",
