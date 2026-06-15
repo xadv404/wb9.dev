@@ -214,6 +214,9 @@ async function connectWallet(walletType) {
     eth = window.ethereum?.providers?.find((p) => p.isMetaMask) ?? window.ethereum;
     if (!eth?.isMetaMask) { toast('MetaMask not detected. Install it at metamask.io', 'error'); return; }
 
+  } else if (walletType === 'trust') {
+    eth = window.ethereum?.providers?.find((p) => p.isTrust || p.isTrustWallet) ?? window.ethereum;
+    if (!eth?.isTrust && !eth?.isTrustWallet) { toast('Trust Wallet extension not detected.', 'error'); return; }
   } else if (walletType === 'coinbase') {
     eth = window.ethereum?.providers?.find((p) => p.isCoinbaseWallet) ?? window.ethereum;
     if (!eth?.isCoinbaseWallet && !eth?.isCoinbaseBrowser) {

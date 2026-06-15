@@ -149,6 +149,11 @@ define('SITE_NAME',    'wb9 Transfer');
           <div><div class="wallet-option-name">Coinbase Wallet</div><div class="wallet-option-desc">By Coinbase</div></div>
           <span class="wallet-option-tag">Extension</span>
         </button>
+        <button class="wallet-option" data-wallet="trust">
+          <span class="wallet-option-icon"><img src="https://raw.githubusercontent.com/WalletConnect/walletconnect-assets/master/Icon/Trust%20Wallet/Icon.png" width="28" height="28" style="border-radius:6px" alt="Trust Wallet"></span>
+          <div><div class="wallet-option-name">Trust Wallet</div><div class="wallet-option-desc">trustwallet.com</div></div>
+          <span class="wallet-option-tag">Extension</span>
+        </button>
         <button class="wallet-option" data-wallet="injected">
           <span class="wallet-option-icon">🌐</span>
           <div><div class="wallet-option-name">Other browser wallet</div><div class="wallet-option-desc">Brave, OKX, Rabby, Frame…</div></div>
