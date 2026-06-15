@@ -166,6 +166,11 @@ const MOBILE_WALLETS = [
     icon: '🟦',
     deeplink: (url) => `bitkeep://bkconnect?action=dapp&url=${encodeURIComponent(url)}`,
   },
+  {
+    name: 'Exodus',
+    icon: '⚡',
+    deeplink: (url) => `exodus://dapp?url=${encodeURIComponent(url)}`,
+  },
 ];
 
 function renderMobileWallets() {
