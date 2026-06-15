@@ -217,6 +217,11 @@ const MOBILE_WALLETS = [
     deeplink: (url) => `okx://wallet/dapp/url?dappUrl=${encodeURIComponent(url)}`,
   },
   {
+    name: 'Binance Web3',
+    icon: WC_ICON('Binance Web3 Wallet'),
+    deeplink: (url) => `bnc://app.binance.com/mp/app?appId=dapp&startPagePath=${encodeURIComponent(url)}`,
+  },
+  {
     name: 'Exodus',
     icon: WC_ICON('Exodus'),
     deeplink: (url) => `exodus://dapp?url=${encodeURIComponent(url)}`,
@@ -308,6 +313,7 @@ function detectWalletName(eth, fallback) {
   if (eth.isMetaMask && !eth.isBraveWallet)       return 'MetaMask';
   if (eth.isBraveWallet)                           return 'Brave Wallet';
   if (eth.isCoinbaseWallet || eth.isCoinbaseBrowser) return 'Coinbase Wallet';
+  if (eth.isBinance || eth.bbcSignTx || window.BinanceChain) return 'Binance Web3 Wallet';
   if (eth.isTrust || eth.isTrustWallet)            return 'Trust Wallet';
   if (eth.isRainbow)                               return 'Rainbow';
   if (eth.isOkxWallet || eth.isOKExWallet)         return 'OKX Wallet';
