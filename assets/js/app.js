@@ -61,9 +61,9 @@ const modalClose    = $('modalClose');
 const toastContainer = $('toastContainer');
 
 // ── EIP-6963: multi-wallet discovery ─────────────────────────────────────────
-// Wallets that support EIP-6963 (MetaMask, Rabby, Coinbase, OKX, Brave,
-// Rainbow, Phantom, Trust, Zerion, Frame, etc.) announce themselves via
-// window events. We collect them and render a button for each.
+// Every browser wallet that supports EIP-6963 announces itself here:
+// MetaMask, Rabby, Coinbase, OKX, Brave, Rainbow, Phantom, Trust (in-browser),
+// Zerion, Frame, Enkrypt, Bitget, Backpack, SafePal, TokenPocket, etc.
 
 const eip6963Providers = new Map(); // rdns → { info, provider }
 
@@ -73,22 +73,24 @@ window.addEventListener('eip6963:announceProvider', (e) => {
   renderDetectedWallets();
 });
 
-// Ask all installed wallets to announce themselves
 window.dispatchEvent(new Event('eip6963:requestProvider'));
 
 function renderDetectedWallets() {
-  const container = document.getElementById('detectedWallets');
-  if (!container) return;
+  const section  = document.getElementById('detectedWallets');
+  const list     = document.getElementById('detectedWalletsList');
+  const fallback = document.getElementById('fallbackWallets');
+  if (!section || !list) return;
 
-  // Remove previous wallet buttons (keep the <p> label as first child)
-  [...container.querySelectorAll('button.wallet-option')].forEach((b) => b.remove());
+  list.innerHTML = '';
 
   eip6963Providers.forEach(({ info, provider }) => {
     const btn = document.createElement('button');
     btn.className = 'wallet-option';
     btn.innerHTML = `
       <span class="wallet-option-icon">
-        ${info.icon ? `<img src="${info.icon}" width="28" height="28" style="border-radius:6px" alt="">` : '🔷'}
+        ${info.icon
+          ? `<img src="${info.icon}" width="28" height="28" style="border-radius:6px" alt="">`
+          : '🔷'}
       </span>
       <div>
         <div class="wallet-option-name">${info.name}</div>
@@ -99,11 +101,98 @@ function renderDetectedWallets() {
       hideWalletModal();
       await connectWithProvider(provider, info.name);
     });
-    container.appendChild(btn);
+    list.appendChild(btn);
   });
 
-  container.style.display = eip6963Providers.size > 0 ? 'block' : 'none';
+  const hasDetected = eip6963Providers.size > 0;
+  section.style.display  = hasDetected ? 'block' : 'none';
+  // Hide generic fallback buttons when EIP-6963 wallets are present
+  if (fallback) fallback.style.display = hasDetected ? 'none' : 'block';
 }
+
+// ── Mobile wallet deep links ──────────────────────────────────────────────────
+// On mobile, clicking these opens the wallet app directly.
+// The app loads the dApp inside its built-in browser and injects window.ethereum.
+
+const MOBILE_WALLETS = [
+  {
+    name: 'MetaMask',
+    icon: '🦊',
+    // metamask.app.link redirects to the app on iOS/Android
+    deeplink: (url) => `https://metamask.app.link/dapp/${url.replace(/^https?:\/\//, '')}`,
+  },
+  {
+    name: 'Trust Wallet',
+    icon: '🛡️',
+    deeplink: (url) => `https://link.trustwallet.com/open_url?coin_id=60&url=${encodeURIComponent(url)}`,
+  },
+  {
+    name: 'Coinbase Wallet',
+    icon: '🔵',
+    deeplink: (url) => `https://go.cb-wallet.com/dapp?url=${encodeURIComponent(url)}`,
+  },
+  {
+    name: 'Rainbow',
+    icon: '🌈',
+    deeplink: (url) => `https://rnbwapp.com/dapp?url=${encodeURIComponent(url)}`,
+  },
+  {
+    name: 'OKX Wallet',
+    icon: '⬛',
+    deeplink: (url) => `okx://wallet/dapp/url?dappUrl=${encodeURIComponent(url)}`,
+  },
+  {
+    name: 'Zerion',
+    icon: '💠',
+    deeplink: (url) => `https://app.zerion.io/dapp?url=${encodeURIComponent(url)}`,
+  },
+  {
+    name: 'imToken',
+    icon: '🔷',
+    deeplink: (url) => `imtokenv2://navigate/DAppBrowser?url=${encodeURIComponent(url)}`,
+  },
+  {
+    name: 'TokenPocket',
+    icon: '💜',
+    deeplink: (url) => `tpoutside://pull.activity?param=${encodeURIComponent(JSON.stringify({ url, chain: 'ETH' }))}`,
+  },
+  {
+    name: 'SafePal',
+    icon: '🔐',
+    deeplink: (url) => `safepal://dapp?url=${encodeURIComponent(url)}`,
+  },
+  {
+    name: 'Bitget Wallet',
+    icon: '🟦',
+    deeplink: (url) => `bitkeep://bkconnect?action=dapp&url=${encodeURIComponent(url)}`,
+  },
+];
+
+function renderMobileWallets() {
+  const list = document.getElementById('mobileWalletsList');
+  if (!list) return;
+  const pageUrl = window.location.href;
+
+  MOBILE_WALLETS.forEach(({ name, icon, deeplink }) => {
+    const btn = document.createElement('a');
+    btn.className  = 'wallet-option';
+    btn.href       = deeplink(pageUrl);
+    // On desktop this opens in a new tab; on mobile it launches the app
+    btn.target     = '_blank';
+    btn.rel        = 'noopener noreferrer';
+    btn.style.textDecoration = 'none';
+    btn.innerHTML  = `
+      <span class="wallet-option-icon">${icon}</span>
+      <div>
+        <div class="wallet-option-name">${name}</div>
+        <div class="wallet-option-desc">Open in ${name} app</div>
+      </div>
+      <span class="wallet-option-tag">Mobile</span>`;
+    list.appendChild(btn);
+  });
+}
+
+renderMobileWallets();
 
 // ── Wallet connection ─────────────────────────────────────────────────────────
 
