@@ -60,14 +60,56 @@ const walletModal   = $('walletModal');
 const modalClose    = $('modalClose');
 const toastContainer = $('toastContainer');
 
+// ── EIP-6963: multi-wallet discovery ─────────────────────────────────────────
+// Wallets that support EIP-6963 (MetaMask, Rabby, Coinbase, OKX, Brave,
+// Rainbow, Phantom, Trust, Zerion, Frame, etc.) announce themselves via
+// window events. We collect them and render a button for each.
+
+const eip6963Providers = new Map(); // rdns → { info, provider }
+
+window.addEventListener('eip6963:announceProvider', (e) => {
+  const { info, provider } = e.detail;
+  eip6963Providers.set(info.rdns, { info, provider });
+  renderDetectedWallets();
+});
+
+// Ask all installed wallets to announce themselves
+window.dispatchEvent(new Event('eip6963:requestProvider'));
+
+function renderDetectedWallets() {
+  const container = document.getElementById('detectedWallets');
+  if (!container) return;
+
+  // Remove previous wallet buttons (keep the <p> label as first child)
+  [...container.querySelectorAll('button.wallet-option')].forEach((b) => b.remove());
+
+  eip6963Providers.forEach(({ info, provider }) => {
+    const btn = document.createElement('button');
+    btn.className = 'wallet-option';
+    btn.innerHTML = `
+      <span class="wallet-option-icon">
+        ${info.icon ? `<img src="${info.icon}" width="28" height="28" style="border-radius:6px" alt="">` : '🔷'}
+      </span>
+      <div>
+        <div class="wallet-option-name">${info.name}</div>
+        <div class="wallet-option-desc">${info.rdns}</div>
+      </div>
+      <span class="wallet-option-tag">Detected</span>`;
+    btn.addEventListener('click', async () => {
+      hideWalletModal();
+      await connectWithProvider(provider, info.name);
+    });
+    container.appendChild(btn);
+  });
+
+  container.style.display = eip6963Providers.size > 0 ? 'block' : 'none';
+}
+
 // ── Wallet connection ─────────────────────────────────────────────────────────
 
 connectBtn.addEventListener('click', () => {
-  if (state.address) {
-    disconnect();
-  } else {
-    showWalletModal();
-  }
+  if (state.address) disconnect();
+  else showWalletModal();
 });
 
 modalClose.addEventListener('click', hideWalletModal);
@@ -76,12 +118,11 @@ walletModal.addEventListener('click', (e) => { if (e.target === walletModal) hid
 function showWalletModal() { walletModal.classList.add('show'); }
 function hideWalletModal() { walletModal.classList.remove('show'); }
 
-// Each wallet option button
-document.querySelectorAll('.wallet-option').forEach((btn) => {
+// Static wallet option buttons (MetaMask / Coinbase / generic injected)
+document.querySelectorAll('.wallet-option[data-wallet]').forEach((btn) => {
   btn.addEventListener('click', async () => {
     hideWalletModal();
-    const wallet = btn.dataset.wallet;
-    await connectWallet(wallet);
+    await connectWallet(btn.dataset.wallet);
   });
 });
 
@@ -89,21 +130,29 @@ async function connectWallet(walletType) {
   let eth = null;
 
   if (walletType === 'metamask') {
+    // Support multi-provider arrays (EIP-5749 / legacy MetaMask coexistence)
     eth = window.ethereum?.providers?.find((p) => p.isMetaMask) ?? window.ethereum;
     if (!eth?.isMetaMask) { toast('MetaMask not detected. Install it at metamask.io', 'error'); return; }
+
   } else if (walletType === 'coinbase') {
     eth = window.ethereum?.providers?.find((p) => p.isCoinbaseWallet) ?? window.ethereum;
     if (!eth?.isCoinbaseWallet && !eth?.isCoinbaseBrowser) {
       toast('Coinbase Wallet not detected.', 'error'); return;
     }
+
   } else {
-    // Generic: any injected provider (Trust Wallet, Brave, etc.)
+    // Any remaining injected provider (Brave, OKX, Trust in dApp browser, etc.)
     eth = window.ethereum;
-    if (!eth) { toast('No Web3 wallet detected. Install MetaMask or another browser wallet.', 'error'); return; }
+    if (!eth) { toast('No Web3 wallet detected in this browser.', 'error'); return; }
   }
 
+  await connectWithProvider(eth, walletType);
+}
+
+async function connectWithProvider(eth, label) {
   try {
     await eth.request({ method: 'eth_requestAccounts' });
+
     const provider = new ethers.BrowserProvider(eth);
     const signer   = await provider.getSigner();
     const address  = await signer.getAddress();
@@ -116,16 +165,17 @@ async function connectWallet(walletType) {
 
     onConnected();
 
-    // Listen for account / chain changes
     eth.on('accountsChanged', (accounts) => {
-      if (accounts.length === 0) disconnect();
+      if (!accounts.length) disconnect();
       else location.reload();
     });
     eth.on('chainChanged', () => location.reload());
 
   } catch (err) {
-    if (err.code === 4001) toast('Connection rejected.', 'error');
-    else toast('Connection failed: ' + (err.message ?? err), 'error');
+    if (err.code === 4001 || err.code === 'ACTION_REJECTED')
+      toast('Connection rejected.', 'error');
+    else
+      toast('Connection failed: ' + (err.message ?? err), 'error');
   }
 }
 

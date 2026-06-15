@@ -145,6 +145,11 @@ define('SITE_NAME',    'wb9 Transfer');
         <span class="wallet-option-tag">EIP-1193</span>
       </button>
     </div>
+
+    <!-- EIP-6963: detected wallets injected here by JS -->
+    <div id="detectedWallets" class="wallet-options" style="margin-top:12px; display:none;">
+      <p style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.6px; margin-bottom:8px;">Detected wallets</p>
+    </div>
   </div>
 </div>
 
@@ -154,6 +159,7 @@ define('SITE_NAME',    'wb9 Transfer');
   window.WB9_CONFIG = {
     rpcMainnet:  '<?= RPC_MAINNET ?>',
     rpcSepolia:  '<?= RPC_SEPOLIA ?>',
+    wcProjectId: '<?= WC_PROJECT_ID ?>',
   };
 </script>
 <script src="assets/js/app.js"></script>
