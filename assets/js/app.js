@@ -6,7 +6,13 @@
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const NETWORKS = {
-  1:        { name: 'Ethereum',  explorer: 'https://etherscan.io/tx/',         dot: 'active' },
+  1:        { name: 'Ethereum',  explorer: 'https://etherscan.io/tx/',          dot: 'active'  },
+  137:      { name: 'Polygon',   explorer: 'https://polygonscan.com/tx/',        dot: 'active'  },
+  56:       { name: 'BNB Chain', explorer: 'https://bscscan.com/tx/',           dot: 'active'  },
+  42161:    { name: 'Arbitrum',  explorer: 'https://arbiscan.io/tx/',           dot: 'active'  },
+  10:       { name: 'Optimism',  explorer: 'https://optimistic.etherscan.io/tx/', dot: 'active' },
+  8453:     { name: 'Base',      explorer: 'https://basescan.org/tx/',          dot: 'active'  },
+  43114:    { name: 'Avalanche', explorer: 'https://snowtrace.io/tx/',          dot: 'active'  },
   11155111: { name: 'Sepolia',   explorer: 'https://sepolia.etherscan.io/tx/', dot: 'warning' },
 };
 
@@ -17,15 +23,76 @@ const ERC20_ABI = [
   'function transfer(address to, uint256 amount) returns (bool)',
 ];
 
+// Top tokens per network (hardcoded seed — augmented at runtime via Uniswap token list)
 const TOKENS = {
   1: [
-    { symbol: 'USDT', name: 'Tether USD',      address: '0xdAC17F958D2ee523a2206206994597C13D831ec7', decimals: 6,  icon: 'usdt' },
-    { symbol: 'USDC', name: 'USD Coin',         address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', decimals: 6,  icon: 'usdc' },
-    { symbol: 'DAI',  name: 'Dai Stablecoin',   address: '0x6B175474E89094C44Da98b954EedeAC495271d0F', decimals: 18, icon: 'dai'  },
-    { symbol: 'WETH', name: 'Wrapped Ether',    address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2', decimals: 18, icon: 'weth' },
+    { symbol: 'USDT', name: 'Tether USD',         address: '0xdAC17F958D2ee523a2206206994597C13D831ec7', decimals: 6  },
+    { symbol: 'USDC', name: 'USD Coin',            address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', decimals: 6  },
+    { symbol: 'DAI',  name: 'Dai Stablecoin',      address: '0x6B175474E89094C44Da98b954EedeAC495271d0F', decimals: 18 },
+    { symbol: 'WETH', name: 'Wrapped Ether',       address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2', decimals: 18 },
+    { symbol: 'WBTC', name: 'Wrapped Bitcoin',     address: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599', decimals: 8  },
+    { symbol: 'LINK', name: 'Chainlink',           address: '0x514910771AF9Ca656af840dff83E8264EcF986CA', decimals: 18 },
+    { symbol: 'UNI',  name: 'Uniswap',             address: '0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984', decimals: 18 },
+    { symbol: 'AAVE', name: 'Aave',                address: '0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9', decimals: 18 },
+    { symbol: 'MKR',  name: 'Maker',               address: '0x9f8F72aA9304c8B593d555F12eF6589cC3A579A2', decimals: 18 },
+    { symbol: 'CRV',  name: 'Curve DAO Token',     address: '0xD533a949740bb3306d119CC777fa900bA034cd52', decimals: 18 },
+    { symbol: 'LDO',  name: 'Lido DAO Token',      address: '0x5A98FcBEA516Cf06857215779Fd812CA3beF1B32', decimals: 18 },
+    { symbol: 'SHIB', name: 'Shiba Inu',           address: '0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE', decimals: 18 },
+    { symbol: 'PEPE', name: 'Pepe',                address: '0x6982508145454Ce325dDbE47a25d4ec3d2311933', decimals: 18 },
+  ],
+  137: [
+    { symbol: 'USDT', name: 'Tether USD',         address: '0xc2132D05D31c914a87C6611C10748AEb04B58e8F', decimals: 6  },
+    { symbol: 'USDC', name: 'USD Coin',            address: '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174', decimals: 6  },
+    { symbol: 'DAI',  name: 'Dai Stablecoin',      address: '0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063', decimals: 18 },
+    { symbol: 'WETH', name: 'Wrapped Ether',       address: '0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619', decimals: 18 },
+    { symbol: 'WBTC', name: 'Wrapped Bitcoin',     address: '0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6', decimals: 8  },
+    { symbol: 'MATIC','name': 'Wrapped MATIC',     address: '0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270', decimals: 18 },
+    { symbol: 'LINK', name: 'Chainlink',           address: '0x53E0bca35eC356BD5ddDFebbD1Fc0fD03FaBad39', decimals: 18 },
+    { symbol: 'AAVE', name: 'Aave',                address: '0xD6DF932A45C0f255f85145f286eA0b292B21C90B', decimals: 18 },
+  ],
+  56: [
+    { symbol: 'USDT', name: 'Tether USD',         address: '0x55d398326f99059fF775485246999027B3197955', decimals: 18 },
+    { symbol: 'USDC', name: 'USD Coin',            address: '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d', decimals: 18 },
+    { symbol: 'DAI',  name: 'Dai Stablecoin',      address: '0x1AF3F329e8BE154074D8769D1FFa4eE058B1DBc3', decimals: 18 },
+    { symbol: 'WBNB', name: 'Wrapped BNB',         address: '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c', decimals: 18 },
+    { symbol: 'WETH', name: 'Wrapped Ether',       address: '0x2170Ed0880ac9A755fd29B2688956BD959F933F8', decimals: 18 },
+    { symbol: 'BTCB', name: 'Bitcoin BEP2',        address: '0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c', decimals: 18 },
+    { symbol: 'CAKE', name: 'PancakeSwap Token',   address: '0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82', decimals: 18 },
+  ],
+  42161: [
+    { symbol: 'USDT', name: 'Tether USD',         address: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9', decimals: 6  },
+    { symbol: 'USDC', name: 'USD Coin',            address: '0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8', decimals: 6  },
+    { symbol: 'DAI',  name: 'Dai Stablecoin',      address: '0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1', decimals: 18 },
+    { symbol: 'WETH', name: 'Wrapped Ether',       address: '0x82aF49447D8a07e3bd95BD0d56f35241523fBab1', decimals: 18 },
+    { symbol: 'WBTC', name: 'Wrapped Bitcoin',     address: '0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f', decimals: 8  },
+    { symbol: 'ARB',  name: 'Arbitrum',            address: '0x912CE59144191C1204E64559FE8253a0e49E6548', decimals: 18 },
+    { symbol: 'LINK', name: 'Chainlink',           address: '0xf97f4df75117a78c1A5a0DBb814Af92458539FB4', decimals: 18 },
+  ],
+  10: [
+    { symbol: 'USDT', name: 'Tether USD',         address: '0x94b008aA00579c1307B0EF2c499aD98a8ce58e58', decimals: 6  },
+    { symbol: 'USDC', name: 'USD Coin',            address: '0x7F5c764cBc14f9669B88837ca1490cCa17c31607', decimals: 6  },
+    { symbol: 'DAI',  name: 'Dai Stablecoin',      address: '0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1', decimals: 18 },
+    { symbol: 'WETH', name: 'Wrapped Ether',       address: '0x4200000000000000000000000000000000000006', decimals: 18 },
+    { symbol: 'WBTC', name: 'Wrapped Bitcoin',     address: '0x68f180fcCe6836688e9084f035309E29Bf0A2095', decimals: 8  },
+    { symbol: 'OP',   name: 'Optimism',            address: '0x4200000000000000000000000000000000000042', decimals: 18 },
+    { symbol: 'LINK', name: 'Chainlink',           address: '0x350a791Bfc2C21F9Ed5d10980Dad2e2638ffa7f6', decimals: 18 },
+  ],
+  8453: [
+    { symbol: 'USDC', name: 'USD Coin',            address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', decimals: 6  },
+    { symbol: 'DAI',  name: 'Dai Stablecoin',      address: '0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb', decimals: 18 },
+    { symbol: 'WETH', name: 'Wrapped Ether',       address: '0x4200000000000000000000000000000000000006', decimals: 18 },
+    { symbol: 'cbETH','name': 'Coinbase ETH',      address: '0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22', decimals: 18 },
+  ],
+  43114: [
+    { symbol: 'USDT', name: 'Tether USD',         address: '0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7', decimals: 6  },
+    { symbol: 'USDC', name: 'USD Coin',            address: '0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E', decimals: 6  },
+    { symbol: 'DAI',  name: 'Dai Stablecoin',      address: '0xd586E7F844cEa2F87f50152665BCbc2C279D8d70', decimals: 18 },
+    { symbol: 'WETH', name: 'Wrapped Ether',       address: '0x49D5c2BdFfac6CE2BFdB6640F4F80f226bc10bAB', decimals: 18 },
+    { symbol: 'WAVAX','name': 'Wrapped AVAX',      address: '0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7', decimals: 18 },
+    { symbol: 'LINK', name: 'Chainlink',           address: '0x5947BB275c521040051D82396192181b413227A3', decimals: 18 },
   ],
   11155111: [
-    { symbol: 'USDC', name: 'USD Coin (Sepolia)', address: '0x94a9D9AC8a22534E3FaCa9F4e7F2E2cf85d5E4C8', decimals: 6,  icon: 'usdc' },
+    { symbol: 'USDC', name: 'USD Coin (Sepolia)',  address: '0x94a9D9AC8a22534E3FaCa9F4e7F2E2cf85d5E4C8', decimals: 6  },
   ],
 };
 
