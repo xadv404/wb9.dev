@@ -144,6 +144,16 @@ const MOBILE_WALLETS = [
     icon: WC_ICON('OKX Wallet'),
     deeplink: (url) => `okx://wallet/dapp/url?dappUrl=${encodeURIComponent(url)}`,
   },
+  {
+    name: 'Exodus',
+    icon: WC_ICON('Exodus'),
+    deeplink: (url) => `exodus://dapp?url=${encodeURIComponent(url)}`,
+  },
+  {
+    name: 'Kraken Wallet',
+    icon: WC_ICON('Kraken Wallet'),
+    deeplink: (url) => `krakenwallet://dapp?url=${encodeURIComponent(url)}`,
+  },
 ];
 
 function renderMobileWallets() {
