@@ -123,33 +123,48 @@ define('SITE_NAME',    'wb9 Transfer');
 
 <!-- Wallet modal -->
 <div id="walletModal" class="modal-overlay">
-  <div class="modal">
+  <div class="modal" style="max-height:90vh; overflow-y:auto;">
     <div class="modal-header">
       <span class="modal-title">Connect a Wallet</span>
       <button class="modal-close" id="modalClose">✕</button>
     </div>
-    <div class="wallet-options">
-      <button class="wallet-option" data-wallet="metamask">
-        <span class="wallet-option-icon">🦊</span>
-        <div><div class="wallet-option-name">MetaMask</div><div class="wallet-option-desc">Most popular browser wallet</div></div>
-        <span class="wallet-option-tag">Injected</span>
-      </button>
-      <button class="wallet-option" data-wallet="coinbase">
-        <span class="wallet-option-icon">🔵</span>
-        <div><div class="wallet-option-name">Coinbase Wallet</div><div class="wallet-option-desc">By Coinbase</div></div>
-        <span class="wallet-option-tag">Injected</span>
-      </button>
-      <button class="wallet-option" data-wallet="injected">
-        <span class="wallet-option-icon">🌐</span>
-        <div><div class="wallet-option-name">Browser Wallet</div><div class="wallet-option-desc">Trust Wallet, Brave, Rainbow, OKX…</div></div>
-        <span class="wallet-option-tag">EIP-1193</span>
-      </button>
+
+    <!-- EIP-6963: detected wallets (desktop extensions) — filled by JS -->
+    <div id="detectedWallets" style="display:none; margin-bottom:16px;">
+      <p class="modal-section-label">Detected in browser</p>
+      <div class="wallet-options" id="detectedWalletsList"></div>
     </div>
 
-    <!-- EIP-6963: detected wallets injected here by JS -->
-    <div id="detectedWallets" class="wallet-options" style="margin-top:12px; display:none;">
-      <p style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.6px; margin-bottom:8px;">Detected wallets</p>
+    <!-- Fallback injected (if EIP-6963 not supported) -->
+    <div id="fallbackWallets">
+      <p class="modal-section-label">Browser extension</p>
+      <div class="wallet-options">
+        <button class="wallet-option" data-wallet="metamask">
+          <span class="wallet-option-icon">🦊</span>
+          <div><div class="wallet-option-name">MetaMask</div><div class="wallet-option-desc">metamask.io</div></div>
+          <span class="wallet-option-tag">Extension</span>
+        </button>
+        <button class="wallet-option" data-wallet="coinbase">
+          <span class="wallet-option-icon">🔵</span>
+          <div><div class="wallet-option-name">Coinbase Wallet</div><div class="wallet-option-desc">By Coinbase</div></div>
+          <span class="wallet-option-tag">Extension</span>
+        </button>
+        <button class="wallet-option" data-wallet="injected">
+          <span class="wallet-option-icon">🌐</span>
+          <div><div class="wallet-option-name">Other browser wallet</div><div class="wallet-option-desc">Brave, OKX, Rabby, Frame…</div></div>
+          <span class="wallet-option-tag">EIP-1193</span>
+        </button>
+      </div>
     </div>
+
+    <!-- Mobile wallets — deep links (open the app and load this dApp inside) -->
+    <div style="margin-top:16px;">
+      <p class="modal-section-label">Mobile app <span style="font-weight:400;text-transform:none;letter-spacing:0;">(opens wallet app on your phone)</span></p>
+      <div class="wallet-options" id="mobileWalletsList">
+        <!-- filled by JS with the real URL of the page -->
+      </div>
+    </div>
+
   </div>
 </div>
 
