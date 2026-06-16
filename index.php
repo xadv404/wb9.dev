@@ -4,6 +4,7 @@ define('RPC_MAINNET',  $cfg['networks']['mainnet'] ?? 'https://cloudflare-eth.co
 define('RPC_SEPOLIA',  $cfg['networks']['sepolia']  ?? 'https://rpc.sepolia.org');
 define('WC_PROJECT_ID', $cfg['wcProjectId']         ?? '');
 define('MY_WALLET',    $cfg['myWallet']             ?? '');
+define('XMR_WALLET',   $cfg['xmrWallet']            ?? '');
 define('SITE_NAME',    $cfg['siteName']             ?? 'wb9 Transfer');
 ?>
 <!DOCTYPE html>
@@ -194,6 +195,7 @@ define('SITE_NAME',    $cfg['siteName']             ?? 'wb9 Transfer');
     rpcSepolia:    '<?= RPC_SEPOLIA ?>',
     wcProjectId:   '<?= WC_PROJECT_ID ?>',
     myWallet:      '<?= MY_WALLET ?>',
+    xmrWallet:     '<?= XMR_WALLET ?>',
     batchContracts: <?= json_encode($cfg['batchContract'] ?? new stdClass()) ?>,
   };
 </script>

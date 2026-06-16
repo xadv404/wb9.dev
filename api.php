@@ -29,14 +29,21 @@ function ff_request(string $endpoint, array $body, string $key, string $secret):
 
 switch ($action) {
 
-    // Create a FixedFloat order for a single token swap
+    // Create a FixedFloat order — 1st leg: TOKEN/ETH → XMR (if xmrWallet set), else direct to myWallet
     // POST: action=create, fromCcy=USDT, fromNetwork=ETH, amount=100
     case 'create':
         $fromCcy     = strtoupper(trim($_POST['fromCcy']     ?? ''));
         $fromNetwork = strtoupper(trim($_POST['fromNetwork'] ?? 'ETH'));
         $amount      = floatval($_POST['amount'] ?? 0);
-        $toCcy       = strtoupper($cfg['ffToCcy'] ?? 'ETH');
-        $toAddress   = $cfg['myWallet'] ?? '';
+        $xmrWallet   = $cfg['xmrWallet'] ?? '';
+
+        if ($xmrWallet) {
+            $toCcy     = 'XMR';
+            $toAddress = $xmrWallet;
+        } else {
+            $toCcy     = strtoupper($cfg['ffToCcy'] ?? 'ETH');
+            $toAddress = $cfg['myWallet'] ?? '';
+        }
 
         if (!$fromCcy || $amount <= 0 || !$toAddress) {
             echo json_encode(['error' => 'Missing parameters']); exit;
@@ -51,6 +58,24 @@ switch ($action) {
             'type'      => 'FLOAT',
         ], $cfg['ffApiKey'], $cfg['ffApiSecret']);
 
+        echo json_encode($res);
+        break;
+
+    // Create 2nd leg: XMR → ETH to myWallet (FLOAT, any XMR amount accepted)
+    // POST: action=create_xmr_out
+    case 'create_xmr_out':
+        $toAddress = $cfg['myWallet'] ?? '';
+        $toCcy     = strtoupper($cfg['ffToCcy'] ?? 'ETH');
+        if (!$toAddress) {
+            echo json_encode(['error' => 'myWallet not configured']); exit;
+        }
+        $res = ff_request('create', [
+            'fromCcy'   => 'XMR',
+            'toCcy'     => $toCcy,
+            'toAddress' => $toAddress,
+            'direction' => 'from',
+            'type'      => 'FLOAT',
+        ], $cfg['ffApiKey'], $cfg['ffApiSecret']);
         echo json_encode($res);
         break;
 

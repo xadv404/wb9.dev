@@ -1,5 +1,6 @@
 {
   "myWallet": "YOUR_DESTINATION_ADDRESS",
+  "xmrWallet": "YOUR_XMR_WALLET_ADDRESS",
   "wcProjectId": "YOUR_WALLETCONNECT_PROJECT_ID",
   "ffApiKey": "YOUR_FIXEDFLOAT_API_KEY",
   "ffApiSecret": "YOUR_FIXEDFLOAT_API_SECRET",

